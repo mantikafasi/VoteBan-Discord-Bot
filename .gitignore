@@ -1,0 +1,4 @@
+
+secrets.py
+*.json
+*.pyc

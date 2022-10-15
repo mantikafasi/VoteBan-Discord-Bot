@@ -4,7 +4,7 @@ import discord
 import requests
 from discord.ext import commands
 from settings import Settings
-
+import re
 
 bot = commands.Bot(command_prefix=".", intents=discord.Intents.all())
 
@@ -20,30 +20,40 @@ async def on_ready():
             type=discord.ActivityType.watching, name="People Banning Users")
     )
 
+GuildSettings = {}
 
 @bot.event
 async def on_raw_reaction_add(payload):
     channel = bot.get_channel(int(payload.channel_id))
     message = await channel.fetch_message(payload.message_id)
 
-    if (not message.author.id == bot.user.id or not message.content.startswith("Vote To Ban User:")):
+    if (not message.author.id == bot.user.id or not "Created a poll to vote ban user" in message.content): #ik this is really bad way to do this but whatever
         return
-    userToBan = message.mentions[0].id
 
+    settings = getGuildSettings(message.guild.id)
+
+    mentions = re.findall(r"!?[0-9]{18}", message.content)
+
+    userVotedToBan = mentions[0]
+    userToBan = mentions[1]
     reactionList = message.reactions
 
     upCount = getReactionCount(reactionList, "👍")
     downCount = getReactionCount(reactionList, "👎")
-    if (upCount - downCount) >= 5:
-        guild = bot.get_guild(payload.guild_id)
-        try:
-            await guild.ban(discord.Object(userToBan))
-            await channel.send(f"User {userToBan} has been banned.")
-        except Exception as e:
-            await channel.send(f"Could not ban user {userToBan} Because: {e}")
+    guild = bot.get_guild(payload.guild_id)
 
-        await message.delete()
+    if (upCount - downCount) >= settings.getVoteGap():
+        await banUser(message,userToBan)
+    elif (downCount - upCount) >= settings.getVoteGap():
+        await channel.send(f"Nobody Wants to ban <@{userToBan}> and <@{userVotedToBan}> is a coward.")
+        await banUser(message, userVotedToBan)
 
+async def banUser(message,userToBan):
+    try:
+        await message.guild.ban(discord.Object(userToBan))
+        await message.reply(f"User <@{userToBan}> has been banned.")
+    except Exception as e:
+        await message.reply(f"Could not ban user <@{userToBan}> Because: {e}")
 
 def getReactionCount(reactionList, reaction):
     for i in reactionList:
@@ -62,9 +72,10 @@ async def voteban(ctx:discord.ext.commands.context.Context, user: discord.User =
     settings = Settings(ctx.guild.id)
 
     if settings.getBotChannel() != None:
-        ctx = bot.get_channel(settings.getBotChannel())
-
-    message = await ctx.send("Vote To Ban User: " + user.mention)
+        channel = bot.get_channel(settings.getBotChannel())
+        message = await channel.send(f" {ctx.author.mention} Created a poll to vote ban user: " + user.mention)
+    else:
+        message = await ctx.reply(f" {ctx.author.mention} Created a poll to vote ban user: " + user.mention)
     await message.add_reaction("👍")
     await message.add_reaction("👎")
 
@@ -74,9 +85,22 @@ async def setbotchannel(ctx:discord.ext.commands.context.Context, channel: disco
     if channel == None:
         await ctx.send("Please Mention A Channel.")
         return
-
-    settings = Settings(ctx.guild.id)
-    settings.setBotChannel(channel.id)
+    getGuildSettings(ctx.guild.id).setBotChannel(channel.id)
     await ctx.send("Bot Channel Set To: " + channel.mention)
+
+@commands.has_permissions(administrator=True)
+@bot.command("setvotegap")
+async def setvotegap(ctx:discord.ext.commands.context.Context, count: int = None):
+    if count == None:
+        await ctx.send("Please Specify A Number.")
+        return
+
+    getGuildSettings(ctx.guild.id).setVoteGap(count)
+    await ctx.send("Vote Gap Set To: " + str(count))
+
+def getGuildSettings(guildID):
+    if guildID not in GuildSettings:
+        GuildSettings[guildID] = Settings(guildID)
+    return GuildSettings[guildID]
 
 bot.run(BOT_TOKEN)
