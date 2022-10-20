@@ -43,10 +43,12 @@ async def on_raw_reaction_add(payload):
     guild = bot.get_guild(payload.guild_id)
 
     if (upCount - downCount) >= settings.getVoteGap():
-        message.edit(message.content + f"\n Voting has ended")
+        message.edit(content = message.content + "\n Voting has ended")
         await banUser(message,userToBan)
     elif (downCount - upCount) >= settings.getVoteGap():
         await channel.send(f"Nobody Wants to ban <@{userToBan}> and <@{userVotedToBan}> is a coward.")
+        message.edit(content = message.content + f"\n Voting has ended")
+
         await banUser(message, userVotedToBan)
 
 async def banUser(message,userToBan):
