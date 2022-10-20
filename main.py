@@ -27,7 +27,7 @@ async def on_raw_reaction_add(payload):
     channel = bot.get_channel(int(payload.channel_id))
     message = await channel.fetch_message(payload.message_id)
 
-    if (not message.author.id == bot.user.id or not "Created a poll to vote ban user" in message.content): #ik this is really bad way to do this but whatever
+    if (not message.author.id == bot.user.id or not "Created a poll to vote ban user" in message.content or "Voting has ended" in message.content): #ik this is really bad way to do this but whatever
         return
 
     settings = getGuildSettings(message.guild.id)
@@ -43,6 +43,7 @@ async def on_raw_reaction_add(payload):
     guild = bot.get_guild(payload.guild_id)
 
     if (upCount - downCount) >= settings.getVoteGap():
+        message.edit(message.content + f"\n Voting has ended")
         await banUser(message,userToBan)
     elif (downCount - upCount) >= settings.getVoteGap():
         await channel.send(f"Nobody Wants to ban <@{userToBan}> and <@{userVotedToBan}> is a coward.")
